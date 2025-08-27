@@ -104,6 +104,7 @@ add_executable(SecureClipPlusPlus ${SRC_FILES})
 
 target_include_directories(SecureClipPlusPlus PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include/thirdparty/json
     ${SODIUM_TP_DIR}  # now points to include/thirdparty
 )
 
