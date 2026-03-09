@@ -4,12 +4,16 @@
 #include <list>
 #include <algorithm>
 #include <fstream>
+#include <thread>
 #include "sodium.h"
+
+
 
 using json = nlohmann::json;
 
 std::forward_list<std::wstring> content = {};
 std::string g_password;
+bool g_verbose = false;
 
 // TODO:
 // -> Save clipboard content to disk == DONE
@@ -96,7 +100,7 @@ void writeToDisk(const std::forward_list<std::wstring>& content) {
 	json outData = {
 		{"salt", toBase64(salt, sizeof(salt))},
 		{"nonce", toBase64(nonce, sizeof(nonce))},
-		{"cypher", toBase64(cypherText.data(), cypherText.size())}
+		{"cypher", toBase64(cypherText.data(), static_cast<int>(cypherText.size()))}
 	};
 
 
@@ -162,7 +166,7 @@ LRESULT CALLBACK hiddenWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 	switch (msg) {
 	case WM_CLIPBOARDUPDATE: {
 
-		std::clog << "Clipboard Updated" << std::endl;
+		if (g_verbose) std::clog << "Clipboard Updated" << std::endl;
 
 		if (OpenClipboard(hWnd)) {
 			HANDLE clipData = GetClipboardData(CF_UNICODETEXT);
@@ -175,26 +179,20 @@ LRESULT CALLBACK hiddenWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 						content.push_front(copied_text);
 					}
 					writeToDisk(content);
-					for (auto& val : content) {
-						std::wcout << val << std::endl;
-
-					}
 					GlobalUnlock(clipData);
 				}
 				else {
-					std::cerr << "Failed to Lock" << std::endl;
+					if (g_verbose) std::cerr << "Failed to Lock" << std::endl;
 				}
 			}
-
 			else {
-				std::cerr << "Failed to retrieve clipboard data" << std::endl;
+				if (g_verbose) std::cerr << "Failed to retrieve clipboard data" << std::endl;
 			}
 
 			CloseClipboard();
 		}
-
 		else {
-			std::cerr << "Failed to open clipboard" << std::endl;
+			if (g_verbose) std::cerr << "Failed to open clipboard" << std::endl;
 		}
 
 		return 0;
@@ -231,6 +229,45 @@ void clipBoardErrorHandler() {
 	exit(1);
 }
 
+void menuPrinter(HWND* win) {
+	std::string choice;
+	while (true) {
+		std::cout << "\n=== SecureClip++ ===" << std::endl;
+		std::cout << "1. View clipboard history" << std::endl;
+		std::cout << "2. Clear clipboard history" << std::endl;
+		std::cout << "3. Toggle verbose logging [" << (g_verbose ? "ON" : "OFF") << "]" << std::endl;
+		std::cout << "4. Exit" << std::endl;
+		std::cout << "> " << std::flush;
+
+		if (!std::getline(std::cin, choice)) break;
+
+		if (choice == "1") {
+			unsigned int i = 1;
+			for (auto& val : content) {
+				std::wcout << std::endl;
+				std::wcout << i++ << ". " << val << std::endl;
+				std::wcout << std::endl;
+			}
+			if (i == 1) {
+				std::cout << "(empty)" << std::endl;
+			}
+		}
+		else if (choice == "2") {
+			content.clear();
+			writeToDisk(content);
+			std::cout << "Clipboard history cleared." << std::endl;
+		}
+		else if (choice == "3") {
+			g_verbose = !g_verbose;
+			std::cout << "Verbose logging " << (g_verbose ? "enabled" : "disabled") << std::endl;
+		}
+		else if (choice == "4") {
+			PostMessage(*win, WM_DESTROY, 0, 0);
+			break;
+		}
+	}
+}
+
 int main() {
 
 	HINSTANCE hInst = GetModuleHandle(nullptr);
@@ -261,11 +298,9 @@ int main() {
 		exit(1);
 	}
 
-
 	if (std::ifstream("data.enc")) {
-		
 		g_password = retrievePassword("Enter password to login: ");
-		
+
 		if (!loadFromDisk(content)) {
 			std::cerr << "Failed to load content from disk - Aborting" << std::endl;
 			exit(1);
@@ -275,12 +310,16 @@ int main() {
 		g_password = retrievePassword("First time login - Set your password: ");
 	}
 
+	unsigned int counter = 1;
 	for (auto& val : content) {
-		std::wcout << val << std::endl;
-
+		std::wcout << counter++ << ". " << val << std::endl;
+		std::wcout << std::endl;
 	}
 
 	std::cout << "Listening for clipboard changes..." << std::endl;
+
+	std::thread menuThread(&menuPrinter, &win);
+	menuThread.detach();
 
 	MSG msg;
 	while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -291,6 +330,7 @@ int main() {
 	RemoveClipboardFormatListener(win);
 	DestroyWindow(win);
 
-	return 0;
+	sodium_memzero(g_password.data(), g_password.size());
 
+	return 0;
 }
