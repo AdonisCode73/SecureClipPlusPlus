@@ -108,7 +108,7 @@ target_include_directories(SecureClipPlusPlus PRIVATE
     ${SODIUM_TP_DIR}  # now points to include/thirdparty
 )
 
-target_compile_definitions(SecureClipPlusPlus PRIVATE UNICODE _UNICODE)
+target_compile_definitions(SecureClipPlusPlus PRIVATE UNICODE _UNICODE SODIUM_STATIC)
 
 target_link_libraries(SecureClipPlusPlus PRIVATE
   sodium
