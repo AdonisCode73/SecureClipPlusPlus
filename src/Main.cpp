@@ -20,7 +20,23 @@ bool g_verbose = false;
 // -> Load content from disk == DONE
 // -> Encrypt the content with password == DONE
 // -> CLI interface to retrieve, clear and access n entry == DONE			(Maybe do a visual clickable interface at a later time)
-// -> Keyboard shortcuts
+// -> Keyboard shortcut(s) == Hotkey for copying is done, maybe do others
+
+static unsigned int listStoredContent() {
+	unsigned int counter = 1;
+
+	for (auto& val : content) {
+		std::wcout << std::endl;
+		std::wcout << counter++ << ". " << val << std::endl;
+		std::wcout << std::endl;
+	}
+
+	if (counter == 1) {
+		std::cout << "(empty)" << std::endl;
+	}
+
+	return counter;
+}
 
 std::string toBase64(const unsigned char* data, int len) {
 	size_t b64len = sodium_base64_encoded_len(len, sodium_base64_VARIANT_ORIGINAL);
@@ -30,7 +46,7 @@ std::string toBase64(const unsigned char* data, int len) {
 	return result;
 }
 
-std::vector<unsigned char> fromBase64(const std::string &b64) {
+std::vector<unsigned char> fromBase64(const std::string& b64) {
 	std::vector<unsigned char> result(b64.size());
 	size_t binLen;
 	if (sodium_base642bin(result.data(), result.size(), b64.data(), b64.size(), nullptr, &binLen, nullptr, sodium_base64_VARIANT_ORIGINAL) < 0) {
@@ -82,9 +98,9 @@ void writeToDisk(const std::forward_list<std::wstring>& content) {
 
 	unsigned char key[crypto_box_SEEDBYTES];
 	if (crypto_pwhash
-		(key, sizeof(key), g_password.c_str(), g_password.size(), salt,
-			crypto_pwhash_OPSLIMIT_INTERACTIVE, crypto_pwhash_MEMLIMIT_INTERACTIVE,
-			crypto_pwhash_ALG_DEFAULT) != 0) 
+	(key, sizeof(key), g_password.c_str(), g_password.size(), salt,
+		crypto_pwhash_OPSLIMIT_INTERACTIVE, crypto_pwhash_MEMLIMIT_INTERACTIVE,
+		crypto_pwhash_ALG_DEFAULT) != 0)
 	{
 		std::cerr << "Deriving key failed - probably out of memory" << std::endl;
 		sodium_memzero(key, sizeof(key));
@@ -164,7 +180,7 @@ bool loadFromDisk(std::forward_list<std::wstring>& content) {
 LRESULT CALLBACK hiddenWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 	switch (msg) {
-	case WM_CLIPBOARDUPDATE: {
+	case WM_HOTKEY: {
 
 		if (g_verbose) std::clog << "Clipboard Updated" << std::endl;
 
@@ -243,32 +259,18 @@ void menuPrinter(HWND* win) {
 		if (!std::getline(std::cin, choice)) break;
 
 		if (choice == "1") {
-			unsigned int i = 1;
-			for (auto& val : content) {
-				std::wcout << std::endl;
-				std::wcout << i++ << ". " << val << std::endl;
-				std::wcout << std::endl;
-			}
-			if (i == 1) {
-				std::cout << "(empty)" << std::endl;
-			}
+			listStoredContent();
 		}
+
 		else if (choice == "2") {
-			unsigned int i = 1;
-			for (auto& val : content) {
-				std::wcout << std::endl;
-				std::wcout << i++ << ". " << val << std::endl;
-				std::wcout << std::endl;
-			}
-			if (i == 1) {
-				std::cout << "(empty)" << std::endl;
-			}
-			else {
+			unsigned int counter = listStoredContent();
+
+			if (counter > 1) {
 				std::string selection;
 				std::getline(std::cin, selection);
 				try {
 					unsigned int idx = std::stoul(selection);
-					if (idx >= 1 && idx < i) {
+					if (idx >= 1 && idx < counter) {
 						auto it = content.begin();
 						std::advance(it, idx - 1);
 
@@ -297,7 +299,6 @@ void menuPrinter(HWND* win) {
 				catch (...) {
 					std::cout << "Invalid Input" << std::endl;
 				}
-
 			}
 		}
 		else if (choice == "3") {
@@ -341,6 +342,10 @@ int main() {
 		clipBoardErrorHandler();
 	}
 
+	if (RegisterHotKey(win, 1, MOD_CONTROL | MOD_SHIFT, 0x44) == 0) {
+		std::cerr << "Failed to register hotkey" << std::endl;
+	}
+
 	if (sodium_init() < 0) {
 		std::cerr << "Failed to init Sodium" << std::endl;
 		exit(1);
@@ -357,14 +362,6 @@ int main() {
 	else {
 		g_password = retrievePassword("First time login - Set your password: ");
 	}
-
-	unsigned int counter = 1;
-	for (auto& val : content) {
-		std::wcout << counter++ << ". " << val << std::endl;
-		std::wcout << std::endl;
-	}
-
-	std::cout << "Listening for clipboard changes..." << std::endl;
 
 	std::thread menuThread(&menuPrinter, &win);
 	menuThread.detach();
