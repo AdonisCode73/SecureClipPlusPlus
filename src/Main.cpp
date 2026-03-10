@@ -19,7 +19,7 @@ bool g_verbose = false;
 // -> Save clipboard content to disk == DONE
 // -> Load content from disk == DONE
 // -> Encrypt the content with password == DONE
-// -> CLI interface to retrieve, clear and access n entry (Later replace with Imgui interface?)
+// -> CLI interface to retrieve, clear and access n entry == DONE			(Maybe do a visual clickable interface at a later time)
 // -> Keyboard shortcuts
 
 std::string toBase64(const unsigned char* data, int len) {
@@ -234,9 +234,10 @@ void menuPrinter(HWND* win) {
 	while (true) {
 		std::cout << "\n=== SecureClip++ ===" << std::endl;
 		std::cout << "1. View clipboard history" << std::endl;
-		std::cout << "2. Clear clipboard history" << std::endl;
-		std::cout << "3. Toggle verbose logging [" << (g_verbose ? "ON" : "OFF") << "]" << std::endl;
-		std::cout << "4. Exit" << std::endl;
+		std::cout << "2. Copy item to clipboard" << std::endl;
+		std::cout << "3. Clear clipboard history" << std::endl;
+		std::cout << "4. Toggle verbose logging [" << (g_verbose ? "ON" : "OFF") << "]" << std::endl;
+		std::cout << "5. Exit" << std::endl;
 		std::cout << "> " << std::flush;
 
 		if (!std::getline(std::cin, choice)) break;
@@ -253,15 +254,62 @@ void menuPrinter(HWND* win) {
 			}
 		}
 		else if (choice == "2") {
+			unsigned int i = 1;
+			for (auto& val : content) {
+				std::wcout << std::endl;
+				std::wcout << i++ << ". " << val << std::endl;
+				std::wcout << std::endl;
+			}
+			if (i == 1) {
+				std::cout << "(empty)" << std::endl;
+			}
+			else {
+				std::string selection;
+				std::getline(std::cin, selection);
+				try {
+					unsigned int idx = std::stoul(selection);
+					if (idx >= 1 && idx < i) {
+						auto it = content.begin();
+						std::advance(it, idx - 1);
+
+						const std::wstring& selected = *it;
+
+						if (OpenClipboard(nullptr)) {
+							EmptyClipboard();
+							size_t bytes = (selected.size() + 1) * sizeof(wchar_t);
+							HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+							if (hMem) {
+								memcpy(GlobalLock(hMem), selected.c_str(), bytes);
+								GlobalUnlock(hMem);
+								SetClipboardData(CF_UNICODETEXT, hMem);
+							}
+							CloseClipboard();
+							std::cout << "Copied to clipboard" << std::endl;
+						}
+						else {
+							std::cout << "Failed to open clipboard" << std::endl;
+						}
+					}
+					else {
+						std::cout << "Invalid selection" << std::endl;
+					}
+				}
+				catch (...) {
+					std::cout << "Invalid Input" << std::endl;
+				}
+
+			}
+		}
+		else if (choice == "3") {
 			content.clear();
 			writeToDisk(content);
 			std::cout << "Clipboard history cleared." << std::endl;
 		}
-		else if (choice == "3") {
+		else if (choice == "4") {
 			g_verbose = !g_verbose;
 			std::cout << "Verbose logging " << (g_verbose ? "enabled" : "disabled") << std::endl;
 		}
-		else if (choice == "4") {
+		else if (choice == "5") {
 			PostMessage(*win, WM_DESTROY, 0, 0);
 			break;
 		}
