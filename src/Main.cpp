@@ -38,6 +38,46 @@ static unsigned int listStoredContent() {
 	return counter;
 }
 
+static void retrieveText() {
+	unsigned int counter = listStoredContent();
+
+	if (counter > 1) {
+		std::string selection;
+		std::getline(std::cin, selection);
+		try {
+			unsigned int idx = std::stoul(selection);
+			if (idx >= 1 && idx < counter) {
+				auto it = content.begin();
+				std::advance(it, idx - 1);
+
+				const std::wstring& selected = *it;
+
+				if (OpenClipboard(nullptr)) {
+					EmptyClipboard();
+					size_t bytes = (selected.size() + 1) * sizeof(wchar_t);
+					HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+					if (hMem) {
+						memcpy(GlobalLock(hMem), selected.c_str(), bytes);
+						GlobalUnlock(hMem);
+						SetClipboardData(CF_UNICODETEXT, hMem);
+					}
+					CloseClipboard();
+					std::cout << "Copied to clipboard" << std::endl;
+				}
+				else {
+					std::cout << "Failed to open clipboard" << std::endl;
+				}
+			}
+			else {
+				std::cout << "Invalid selection" << std::endl;
+			}
+		}
+		catch (...) {
+			std::cout << "Invalid Input" << std::endl;
+		}
+	}
+}
+
 std::string toBase64(const unsigned char* data, int len) {
 	size_t b64len = sodium_base64_encoded_len(len, sodium_base64_VARIANT_ORIGINAL);
 	std::string result(b64len, '\0');
@@ -257,62 +297,40 @@ void menuPrinter(HWND* win) {
 		std::cout << "> " << std::flush;
 
 		if (!std::getline(std::cin, choice)) break;
+		try {
+			int option = std::stoi(choice);
 
-		if (choice == "1") {
-			listStoredContent();
-		}
-
-		else if (choice == "2") {
-			unsigned int counter = listStoredContent();
-
-			if (counter > 1) {
-				std::string selection;
-				std::getline(std::cin, selection);
-				try {
-					unsigned int idx = std::stoul(selection);
-					if (idx >= 1 && idx < counter) {
-						auto it = content.begin();
-						std::advance(it, idx - 1);
-
-						const std::wstring& selected = *it;
-
-						if (OpenClipboard(nullptr)) {
-							EmptyClipboard();
-							size_t bytes = (selected.size() + 1) * sizeof(wchar_t);
-							HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, bytes);
-							if (hMem) {
-								memcpy(GlobalLock(hMem), selected.c_str(), bytes);
-								GlobalUnlock(hMem);
-								SetClipboardData(CF_UNICODETEXT, hMem);
-							}
-							CloseClipboard();
-							std::cout << "Copied to clipboard" << std::endl;
-						}
-						else {
-							std::cout << "Failed to open clipboard" << std::endl;
-						}
-					}
-					else {
-						std::cout << "Invalid selection" << std::endl;
-					}
-				}
-				catch (...) {
-					std::cout << "Invalid Input" << std::endl;
-				}
+			switch (option) {
+			case 1: {
+				listStoredContent();
+				break;
 			}
+			case 2: {
+				retrieveText();
+				break;
+			}
+			case 3: {
+				content.clear();
+				writeToDisk(content);
+				std::cout << "Clipboard history cleared." << std::endl;
+				break;
+			}
+			case 4: {
+				g_verbose = !g_verbose;
+				std::cout << "Verbose logging " << (g_verbose ? "enabled" : "disabled") << std::endl;
+				break;
+			}
+			case 5: {
+				PostMessage(*win, WM_DESTROY, 0, 0);
+				break;
+			}
+			default:
+				std::cout << "Invalid choice. Enter a choice 1...5" << std::endl;
+				break;
+			};
 		}
-		else if (choice == "3") {
-			content.clear();
-			writeToDisk(content);
-			std::cout << "Clipboard history cleared." << std::endl;
-		}
-		else if (choice == "4") {
-			g_verbose = !g_verbose;
-			std::cout << "Verbose logging " << (g_verbose ? "enabled" : "disabled") << std::endl;
-		}
-		else if (choice == "5") {
-			PostMessage(*win, WM_DESTROY, 0, 0);
-			break;
+		catch (...) {
+			std::cout << "Invalid input. Enter a numerical value 1...5" << std::endl;
 		}
 	}
 }
